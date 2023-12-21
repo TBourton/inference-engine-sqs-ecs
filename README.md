@@ -172,3 +172,4 @@ or, to generate fresh ones
 - ~Autoscaling https://github.com/dailymuse/terraform-aws-ecs-queue-backlog-autoscaling/tree/2.4.0/examples/sqs-scaling ~
 - Remove egress all in favour of VPC endpoints for ECR: https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html
 - Cloudwatch alarms in terraform
+- Fully migrate from gitlab CI to github

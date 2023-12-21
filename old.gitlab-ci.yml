@@ -86,7 +86,7 @@ pages:
   needs: [lint, test]
   stage: docs-python
   script:
-    - pip install -U sphinx~=6.2.1 faculty-sphinx-theme
+    - pip install -U sphinx~=6.2.1 sphinx-rtd-theme
     - pip install .[consumer,producer]
     - make -C docs html
     - mv build/sphinx/html/ public/

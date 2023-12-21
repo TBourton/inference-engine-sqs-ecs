@@ -1,0 +1,28 @@
+---
+name: terraform-tests
+on: [push]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        tf_workspace: ["staging", "prod"]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: hashicorp/setup-terraform@v1
+
+      - name: select-dir
+        run: |
+          cd terraform/infra
+          touch "${{ matrix.tf_workspace }}.tfvars"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive

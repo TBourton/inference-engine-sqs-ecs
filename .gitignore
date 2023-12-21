@@ -70,7 +70,7 @@ src/*/.yarn/*
 !src/*/.yarn/versions
 src/**/node_modules
 *.idea
-
+.coverage.*
 .env.*
 !example.env
 temp
@@ -109,7 +109,3 @@ override.tf.json
 
 # Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
 # example: *tfplan*
-.coverage.*
-
-
-ct-inference-engine
