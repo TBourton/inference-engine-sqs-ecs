@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Dependencies
-        run: pip install -U sphinx~=6.2.1 sphinx-rtd-theme
+        run: pip install -U sphinx~=6.2.1 sphinx-rtd-theme myst_parser
 
       - name: Build Docs
         run: |
