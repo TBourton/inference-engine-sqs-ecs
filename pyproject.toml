@@ -98,6 +98,12 @@ linting = [
     "yamllint",
 ]
 
+docs = [
+    "sphinx~=6.2.1",
+    "sphinx-rtd-theme",
+    "myst_parser",
+]
+
 [tool.pyright]
 include = ["src", "tests", "e2e_test"]
 exclude = [
