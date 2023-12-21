@@ -1,0 +1,129 @@
+[tool.black]
+line-length = 79
+exclude = '''
+/(
+    \.git
+  | \.mypy_cache
+  | \.nox
+  | build
+  | dist
+  | docs
+  | \.eggs
+  | \.cache
+)/
+'''
+
+[tool.isort]
+py_version = 3
+profile = "black"
+known_test = "pytest,pytest_mock,pytest_lazyfixture"
+known_setuptools="setuptools,pkg_resources"
+sections="FUTURE,STDLIB,SETUPTOOLS,TEST,THIRDPARTY,FIRSTPARTY,LOCALFOLDER"
+skip=".tox,.nox,.venv,build,dist,.cache,docs"
+line_length=79
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests"]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+fallback_version = "0.0.0"
+
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -v --cov=src --cov=inference_engine --cov-append --cov-report=term-missing"
+testpaths = "tests"
+norecursedirs = [
+    "dist",
+    "build",
+    ".tox",
+    ".cache",
+]
+
+[tool.coverage.run]
+omit = ["tests/*", "e2e_test/*"]
+
+[tool.coverage.paths]
+source = ["src", "/usr/local/lib/python3.10/site-packages"]
+
+[project]
+name = "inference_engine"
+description = "Inference engine for ML jobs"
+authors = [{ name="Thomas Bourton", email="tbourton<at>gmail.com"}]
+readme = 'README.md'
+requires-python = ">=3.9"
+dynamic = ["version"]
+dependencies = [
+    "boto3",
+    "boto3-stubs[sqs,dynamodb]",
+    "loguru",
+]
+
+[project.optional-dependencies]
+producer = []
+consumer = [
+    "fastapi",
+    "requests",
+    "starlette<1.0",
+]
+
+testing = [
+    "pytest",
+    "pytest-cov",
+    "pytest-randomly",
+    "pytest-mock",
+    "pytest-lazy-fixture",
+    "coverage[toml]",
+    "httpx",
+    "http_server_mock",
+    "boto3-stubs[ssm]",
+]
+linting = [
+    "black",
+    "isort",
+    "flake8",
+    "pyright",
+    "pylint",
+    "pydocstyle",
+    "bandit",
+    "yamllint"
+]
+
+[tool.pyright]
+include = ["src", "tests", "e2e_test"]
+exclude = [
+  "**/__pycache__",
+  ".git",
+  "build/",
+  ".eggs",
+  "**/dev",
+  "**/.cache",
+  "**/lambda-function",
+]
+pythonVersion = "3.10"
+pythonPlatform = "Linux"
+
+[tool.bandit]
+exclude_dirs = [
+    "tests",
+    ".git",
+    "build",
+    "dist",
+    "docs",
+    ".eggs",
+    "e2e_tests",
+    "example",
+]
+
+[tool.pydocstyle]
+ignore = "D105,D203,D204,D211,D213,D417"
+match_dir = "^(?!(dev|docs|build|tests|example|e2e_test)).*"

@@ -1,0 +1,4 @@
+-e file:.[consumer]
+fastapi
+uvicorn
+python-dotenv

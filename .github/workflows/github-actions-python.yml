@@ -1,0 +1,61 @@
+---
+name: python-tests
+on: [push]
+
+jobs:
+  lint:
+    # runs-on: ubuntu-latest
+    container: python:3.10
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install python dependencies
+        run: |
+          pip install -r lint-requirements.txt -r test-requirements.txt -r requirements.txt
+          pip install .[linting,testing,consumer,producer]
+
+      - name: isort
+        run: isort --check .
+
+      - name: black
+        run: black --check .
+
+      - name: flake8
+        run: flake8 .
+
+      - name: pylint
+        run: pylint src tests e2e_test
+
+      - name: pydocstyle
+        run: pydocstyle src
+
+      - name: bandit
+        run: bandit -r src
+
+      - name: pyright
+        run: pyright
+
+      - name: yamllint
+        run: yamllint .
+
+  test:
+    container: python:3.10
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local
+      sqs:
+        image: softwaremill/elasticmq
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install python dependencies
+        run: |
+          pip install -r requirements.txt -r test-requirements.txt
+          pip install .[testing,consumer,producer]
+
+      - name: test
+        run: pytest --cov-report=xml --cov=src --junitxml=report.xml --cov-fail-under=80 tests
+        env:
+          SQS_ENDPOINT_URL: "http://sqs:9324"
+          DDB_ENDPOINT_URL: "http://dynamodb:8000"

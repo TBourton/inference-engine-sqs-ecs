@@ -1,0 +1,10 @@
+---
+extends: default
+
+rules:
+  line-length: disable
+  truthy: disable
+
+ignore:  # ignore all helm chart yaml files, as they are templates, not real yaml
+  - .terraform/
+  - .venv

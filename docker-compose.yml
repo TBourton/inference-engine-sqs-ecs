@@ -1,0 +1,59 @@
+---
+version: '3.8'
+services:
+  dynamodb-local:
+    command: "-jar DynamoDBLocal.jar -inMemory -sharedDb"
+    image: "amazon/dynamodb-local:1.21.0"
+    container_name: dynamodb-local
+    ports:
+      - "8000:8000"
+
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin
+    container_name: dynamodb-admin
+    ports:
+      - "8001:8001"
+    environment:
+      DYNAMO_ENDPOINT: "http://dynamodb-local:8000"
+      AWS_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    depends_on:
+      - dynamodb-local
+
+  sqs:
+    image: softwaremill/elasticmq:1.3.14
+    container_name: sqs
+    ports:
+      - 9324:9324
+      - 9325:9325
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9325"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  consumer:
+    build:
+      context: .
+      dockerfile: example/Dockerfile
+    container_name: consumer
+    restart: on-failure
+    ports:
+      - "80:80"
+    env_file:
+      - example/docker.env
+    depends_on:
+      dynamodb-local:
+        condition: service_started
+      sqs:
+        condition: service_healthy
+    healthcheck:
+      # test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      test: ["CMD", "curl -f http://localhost:80/health || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 15
+      start_period: 15s

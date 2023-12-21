@@ -1,0 +1,266 @@
+---
+stages:
+  - lint-python
+  - test-python
+  - docs-python
+  - build-python
+  - build-docker
+  - tf-lint
+  - tf-validate
+  - tf-plan
+  - tf-apply
+  - test-python-e2e
+
+
+# Change pip's cache directory to be inside the project directory since we can
+# only cache local items.
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PYRIGHT_PYTHON_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pyright-python"
+  DEBIAN_FRONTEND: noninteractive
+
+# Pip's cache doesn't store the python packages
+# https://pip.pypa.io/en/stable/reference/pip_install/#caching
+
+.python-template:
+  image: python:3.10
+  needs: []
+  cache:
+    paths:
+      - .cache/pip
+
+lint:
+  stage: lint-python
+  extends: .python-template
+  cache:
+    paths:
+      - ".cache/pip"
+      - ".cache/pyright-python"
+  before_script:
+    - pip install -r lint-requirements.txt -r test-requirements.txt -r requirements.txt
+    - pip install .[linting,testing,consumer,producer]
+  script:
+    - isort --check .
+    - black --check .
+    - flake8 .
+    - pylint src tests e2e_test
+    - pydocstyle src
+    - bandit -r src
+    - pyright
+
+test:
+  stage: test-python
+  extends: .python-template
+  services:
+    - name: amazon/dynamodb-local
+      alias: dynamodb
+    - name: softwaremill/elasticmq
+      alias: sqs
+  variables:
+    SQS_ENDPOINT_URL: "http://sqs:9324"
+    DDB_ENDPOINT_URL: "http://dynamodb:8000"
+  before_script:
+    - pip install -r requirements.txt -r test-requirements.txt
+    - pip install .[testing,consumer,producer]
+  script:
+    - pytest --cov-report=xml --cov=src --junitxml=report.xml --cov-fail-under=80 tests
+  coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+build-python:
+  stage: build-python
+  extends: .python-template
+  only:
+    - tags
+  needs: [lint, test]
+  script:
+    - pip install twine
+    - python setup.py bdist_wheel
+    - twine upload dist/* --verbose
+
+pages:
+  extends: .python-template
+  needs: [lint, test]
+  stage: docs-python
+  script:
+    - pip install -U sphinx~=6.2.1 faculty-sphinx-theme
+    - pip install .[consumer,producer]
+    - make -C docs html
+    - mv build/sphinx/html/ public/
+  artifacts:
+    paths:
+      - public
+  only:
+    - tags
+    - master
+
+build-docker:
+  image: docker:20.10.23
+  services:
+    - docker:20.10.23-dind
+  stage: build-docker
+  needs: [lint, test]
+  variables:
+    GITLAB_REPO: $CI_REGISTRY_IMAGE/ct-inference-engine
+    ECR_REPO: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/ct
+    DOCKERFILE: example/Dockerfile
+    CONTEXT: .
+  before_script:
+    - apk add --no-cache curl jq python3 py3-pip
+    - pip install awscli
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_DEFAULT_REGION
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker login -u AWS -p $(aws ecr get-login-password --region $AWS_REGION) $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+  script:
+    - docker pull $GITLAB_REPO:latest || true
+    - DOCKER_BUILDKIT=1 docker build
+        --build-arg BUILDKIT_INLINE_CACHE=1
+        --build-arg PSEUDO_VERSION=$(git describe --long)
+        --cache-from $GITLAB_REPO:latest
+        --cache-from $ECR_REPO:latest
+        --tag $GITLAB_REPO:$CI_COMMIT_SHA
+        --tag $GITLAB_REPO:latest
+        --tag $ECR_REPO:$CI_COMMIT_SHA
+        --tag $ECR_REPO:latest
+        -f $DOCKERFILE $CONTEXT
+    - docker push $GITLAB_REPO:$CI_COMMIT_SHA
+    - docker push $ECR_REPO:$CI_COMMIT_SHA
+    - if [ ! -z ${CI_COMMIT_TAG+x} ]; then
+        docker tag $GITLAB_REPO:$CI_COMMIT_SHA $GITLAB_REPO:$CI_COMMIT_TAG;
+        docker tag $ECR_REPO:$CI_COMMIT_SHA $ECR_REPO:$CI_COMMIT_TAG;
+        docker push $GITLAB_REPO:$CI_COMMIT_TAG;
+        docker push $ECR_REPO:$CI_COMMIT_TAG;
+      fi
+    - docker push $GITLAB_REPO:latest
+    - docker push $ECR_REPO:latest
+
+.tf-workspace-matrix: &tf-workspace-matrix
+  parallel:
+    matrix:  # Use TF_WORKSPACE var directly https://developer.hashicorp.com/terraform/cli/config/environment-variables#tf_workspace
+      - TF_WORKSPACE: [staging, prod]
+
+.tf-template:
+  image:
+    name: "hashicorp/terraform:light"
+    entrypoint:
+      - "/usr/bin/env"
+      - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  variables:
+    AWS_ACCESS_KEY_ID: $TERRAFORM_AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: $TERRAFORM_SECRET_ACCESS_KEY
+    TF_INPUT: 0
+    TF_IN_AUTOMATION: 1
+    TF_LOG: error
+    TF_CLI_ARGS_plan: "-input=false -lock=true -no-color -compact-warnings -var-file=${TF_WORKSPACE}.tfvars"
+    TF_CLI_ARGS_apply: "-input=false -lock=true -no-color -compact-warnings"
+    # TF_CLI_ARGS_init: "-lock=true -no-color -lockfile=readonly"
+    TF_CLI_ARGS_init: "-lock=true -no-color"
+  before_script:
+    - terraform --version
+    - cd terraform/infra
+    - touch "${TF_WORKSPACE}.tfvars"
+    - rm -rf .terraform
+    - terraform init
+
+tflint:
+  <<: *tf-workspace-matrix
+  stage: tf-lint
+  needs: []
+  before_script:
+    - cd terraform/${IAC_FOLDER}
+  image:
+    name: "ghcr.io/terraform-linters/tflint"
+    entrypoint: [""]
+  script:
+    - tflint --version
+    - tflint --init
+    - tflint --recursive -f compact
+
+tfsec:
+  <<: *tf-workspace-matrix
+  stage: tf-lint
+  needs: []
+  image:
+    name: "aquasec/tfsec"
+    entrypoint: [""]
+  before_script:
+    - cd terraform/infra
+    - touch "${TF_WORKSPACE}.tfvars"
+  script:
+    - tfsec --tfvars-file="${TF_WORKSPACE}.tfvars" .
+
+tf-fmt:
+  <<: *tf-workspace-matrix
+  stage: tf-lint
+  extends: .tf-template
+  needs: []
+  script:
+    - terraform fmt -check=true -recursive -no-color
+
+tf-validate:
+  <<: *tf-workspace-matrix
+  needs:
+    - tfsec
+    - tflint
+    - tf-fmt
+  extends: .tf-template
+  stage: tf-validate
+  script:
+    - terraform validate
+
+tf-plan:
+  <<: *tf-workspace-matrix
+  extends: .tf-template
+  stage: tf-plan
+  script:
+    - ECR_IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHA}"
+    - echo "Image tag used $ECR_IMAGE_TAG"
+    - terraform plan -var "container_tag=${ECR_IMAGE_TAG}" -out "${TF_WORKSPACE}.planfile"
+  needs:
+    - tf-validate
+    - build-docker
+  artifacts:
+    paths:
+      - "terraform/infra/${TF_WORKSPACE}.planfile"
+      - "**/*.zip"
+
+tf-apply-staging:
+  extends: .tf-template
+  stage: tf-apply
+  variables:
+    TF_WORKSPACE: staging
+  script:
+    - terraform apply "${TF_WORKSPACE}.planfile"
+  needs:
+    - tf-plan
+  when: manual
+
+tf-apply-prod:
+  extends: .tf-template
+  stage: tf-apply
+  variables:
+    TF_WORKSPACE: prod
+  script:
+    - terraform apply "${TF_WORKSPACE}.planfile"
+  needs:
+    - tf-plan
+  when: manual
+
+e2e-test:
+  stage: test-python-e2e
+  needs: [tf-apply-staging]
+  extends: .python-template
+  variables:
+    INFERENCE_ENGINE_TARGET_ENVIRONMENT: staging
+    # AWS_ACCESS_KEY_ID: $TERRAFORM_AWS_ACCESS_KEY_ID
+    # AWS_SECRET_ACCESS_KEY: $TERRAFORM_SECRET_ACCESS_KEY
+  before_script:
+    - pip install -r requirements.txt -r test-requirements.txt
+    - pip install .[testing,producer]
+  script:
+    - python -m pytest --no-cov e2e_test/test.py
