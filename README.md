@@ -1,4 +1,4 @@
-# BNSSG CT (THIS IS WORK IN PROGRESS)
+# Inference Engine for Async Python Workloads
 
 Scalable async compute using SQS, DynamoDB & ECS.
 
@@ -176,3 +176,5 @@ or, to generate fresh ones
 - Remove egress all in favour of VPC endpoints for ECR: https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html
 - Cloudwatch alarms in terraform
 - Fully migrate from gitlab CI to github actions
+- Deploy into an AWS account
+- More documentation

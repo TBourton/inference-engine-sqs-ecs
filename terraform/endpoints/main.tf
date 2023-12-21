@@ -12,7 +12,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket  = "bnssg-ct-inference-terraform-state"
+    bucket  = "my-s3-bucket"
     key     = "endpoints.tfstate"
     region  = "eu-west-2"
     encrypt = true
