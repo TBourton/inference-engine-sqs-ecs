@@ -58,7 +58,7 @@ source = ["src", "/usr/local/lib/python3.10/site-packages"]
 [project]
 name = "inference_engine"
 description = "Inference engine for ML jobs"
-authors = [{ name="Thomas Bourton", email="tbourton<at>gmail.com"}]
+authors = [{ name="Thomas Bourton"}]
 readme = 'README.md'
 requires-python = ">=3.9"
 dynamic = ["version"]
@@ -95,7 +95,7 @@ linting = [
     "pylint",
     "pydocstyle",
     "bandit",
-    "yamllint"
+    "yamllint",
 ]
 
 [tool.pyright]
