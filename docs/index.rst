@@ -25,6 +25,7 @@ Contents
    :maxdepth: 2
 
    Installation <installation>
+   Overview <README>
    License <license>
    Module Reference <api/modules>
 
