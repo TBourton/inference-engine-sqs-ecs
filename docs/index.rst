@@ -26,7 +26,7 @@ Contents
 
    Installation <installation>
    Overview <README>
-   License <license>
+   License <LICENSE>
    Module Reference <api/modules>
 
 
